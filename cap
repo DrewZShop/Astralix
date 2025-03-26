@@ -353,31 +353,32 @@ local function getPlayerStats()
         ShinyScore = player.ShinyScore.Value,
         MetallicScore = player.MetallicScore.Value,
         GiantScore = player.GiantScore.Value,
-        ShinyGiantScore = player.ShinyGiantScore.Value
+        ShinyGiantScore = player.ShinyGiantScore.Value,
+        Ingots = player.Ingots.Value -- Adding Ingots tracking
     }
 end
 
 local function formatNumber(n)
-    if not n then return "0" end  
-    n = tonumber(n) or 0  
+    if not n then return "0" end  -- Prevent nil errors
+    n = tonumber(n) or 0  -- Ensure it's a number
     local formatted = tostring(n):reverse():gsub("(%d%d%d)", "%1,"):reverse()
-    return formatted:gsub("^,", "")  
+    return formatted:gsub("^,", "")  -- Remove leading comma if any
 end
 
 local function sendWebhookNotification(stats, webhookUrl)
+    -- Debug: Print the webhook URL to the console to ensure it's being retrieved properly
+    print("Webhook URL: " .. tostring(webhookUrl))  -- Debug line
     
-    print("Webhook URL: " .. tostring(webhookUrl))  
-    
-    
+    -- Check if the webhook URL is valid
     if not webhookUrl or webhookUrl == "" then
         warn("🚨 Webhook URL is missing! Make sure you input a valid webhook URL.")
         return
     end
 
-    
+    -- Create embed
     local embed = {
         ["title"] = "📊 Astralix Hub - Earnings Update",
-        ["color"] = 16755200,  
+        ["color"] = 16755200,  -- Gold-like color
         ["thumbnail"] = { ["url"] = "https://i.imgur.com/DJrbhI8.png" },
         ["fields"] = {
             { ["name"] = "💰 Gold", ["value"] = formatNumber(stats.Gold), ["inline"] = true },
@@ -387,22 +388,23 @@ local function sendWebhookNotification(stats, webhookUrl)
             { ["name"] = "✨ Shiny Score", ["value"] = formatNumber(stats.ShinyScore), ["inline"] = true },
             { ["name"] = "🥇 Metallic Score", ["value"] = formatNumber(stats.MetallicScore), ["inline"] = true },
             { ["name"] = "🗿 Giant Score", ["value"] = formatNumber(stats.GiantScore), ["inline"] = true },
-            { ["name"] = "🌟 Shiny Giant Score", ["value"] = formatNumber(stats.ShinyGiantScore), ["inline"] = true }
+            { ["name"] = "🌟 Shiny Giant Score", ["value"] = formatNumber(stats.ShinyGiantScore), ["inline"] = true },
+            { ["name"] = "⛓️ Ingots", ["value"] = formatNumber(stats.Ingots), ["inline"] = true } -- New field for Ingots
         },
         ["footer"] = { ["text"] = "🔔 Astralix Hub Notifications", ["icon_url"] = "https://i.imgur.com/DJrbhI8.png" },
         ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
     }
 
-    
+    -- Send request
     local payload = {
         ["username"] = "Astralix Hub",
         ["avatar_url"] = "https://i.imgur.com/DJrbhI8.png",
         ["embeds"] = { embed }
     }
 
-    
+    -- Send HTTP request to webhook
     http_request({
-        Url = webhookUrl,  
+        Url = webhookUrl,  -- Ensure this exists
         Method = "POST",
         Headers = { ["Content-Type"] = "application/json" },
         Body = game:GetService("HttpService"):JSONEncode(payload)
@@ -426,19 +428,19 @@ local function startTracking()
         storedValues = newValues
 
         if next(changes) then
-            sendWebhookNotification(changes, webhookURL)  
+            sendWebhookNotification(changes, webhookURL)  -- Pass the URL here
         end
 
-        wait(delayTime * 60) 
+        wait(delayTime * 60)  -- Delay in minutes
     end
 end
 
+-- Webhook settings in the UI
 Tabs.Webhook:AddInput("WebhookURL", {
     Title = "Input Discord Webhook",
     Placeholder = "Enter your Webhook URL",
     Callback = function(value)
         webhookURL = value
-        print("Webhook URL set to:", webhookURL)  
     end
 })
 
@@ -449,9 +451,7 @@ Tabs.Webhook:AddInput("Delay", {
         local num = tonumber(value)
         if num and num > 0 then
             delayTime = num
-            print("Delay set to:", delayTime, "minutes")
         else
-            warn("Invalid delay input!")
         end
     end
 })
@@ -463,13 +463,13 @@ Tabs.Webhook:AddToggle("EnableNotifications", {
         sendNotifications = state
         if sendNotifications then
             storedValues = getPlayerStats() 
-            print("Webhook notifications enabled!")
             startTracking()
         else
-            print("Webhook notifications disabled!")
         end
     end
 })
+
+
 
 local Options = Fluent.Options
 
