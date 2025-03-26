@@ -1,0 +1,485 @@
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "Astralix Hub",
+    SubTitle = "1.0",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+local Tabs = {
+    Astralix = Window:AddTab({ Title = "Astralix Hub", Icon = "crown" }),
+    Farm = Window:AddTab({ Title = "Farm", Icon = "gem" }), 
+    Rebirth = Window:AddTab({ Title = "Rebirth", Icon = "recycle" }),
+    Ws = Window:AddTab({ Title = "Wall Shop's", Icon = "shopping-cart" }),
+    Cs = Window:AddTab({ Title = "Crystal Shop's", Icon = "shopping-cart" }),
+    Teleport = Window:AddTab({ Title = "Teleport", Icon = "crosshair" }),
+    Eggs = Window:AddTab({ Title = "Egg's", Icon = "egg" }),
+    Players = Window:AddTab({ Title= "Player's", Icon = "users"}),
+    Webhook = Window:AddTab({ Title = "Webhook", Icon = "circle-ellipsis"}),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings"})
+}
+
+Tabs.Astralix:AddParagraph({
+    Title = "Astralix Hub",
+    Content = "Welcome to Astralix Hub!"
+})
+
+Tabs.Astralix:AddButton({
+    Title = "Join The Discord!",
+    Callback = function()
+        setclipboard("https://discord.gg/AstralixHub")
+        Fluent:Notify({
+            Title = "Success",
+            Content = "Discord link copied to clipboard!",
+            Duration = 3
+        })
+    end
+})
+
+
+local eggOptions = {
+    "Common",
+    "Uncommon",
+    "Rare",
+    "Epic",
+    "Legendary",
+    "Prodigious",
+    "Ascended"
+}
+
+local eggIDs = {
+    Common = 1,
+    Uncommon = 2,
+    Rare = 3,
+    Epic = 4,
+    Legendary = 5,
+    Prodigious = 6,
+    Ascended = 7
+}
+
+local selectedEgg = "Common"
+local autoBuyEnabled = false
+
+Tabs.Eggs:AddDropdown("EggDropdown", {
+    Title = "Select Egg Type",
+    Values = eggOptions,
+    Multi = false,
+    Default = "Common",
+    Callback = function(value)
+        selectedEgg = value
+    end
+})
+
+Tabs.Eggs:AddToggle("AutoBuyToggle", {
+    Title = "Auto Buy Eggs",
+    Default = false,
+    Callback = function(value)
+        autoBuyEnabled = value
+    end
+})
+
+Tabs.Eggs:AddButton({
+    Title = "Disable Egg Opening Animation",
+    Callback = function()
+        local eggPath = game:GetService("Players").LocalPlayer.PlayerGui.ScreenGui.Hatcher.EggViewport:FindFirstChild("Egg_Common")
+        if eggPath then
+            eggPath:Destroy()
+        end
+    end
+})
+
+Tabs.Eggs:AddParagraph({
+    Title = "Warning",
+    Content = "!!! Warning, This will remove the ability to purchase eggs from the physical egg. You will only be able to purchase the egg with this script."
+})
+
+local function autoBuyEgg()
+    while true do
+        if autoBuyEnabled then
+            local args = { [1] = eggIDs[selectedEgg] }
+            game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyEgg"):FireServer(unpack(args))
+        end
+        wait(0.5)
+    end
+end
+
+spawn(autoBuyEgg)
+
+local playerList = {}
+local selectedPlayer = nil
+
+local function updatePlayerList()
+    playerList = {}
+    for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
+        table.insert(playerList, player.Name)
+    end
+    Fluent.Options.PlayerDropdown:SetValues(playerList)
+end
+
+Tabs.Players:AddDropdown("PlayerDropdown", {
+    Title = "Select Player",
+    Values = playerList,
+    Multi = false,
+    Callback = function(value)
+        selectedPlayer = value
+    end
+})
+
+Tabs.Players:AddButton({
+    Title = "Teleport",
+    Callback = function()
+        if selectedPlayer then
+            local targetPlayer = game:GetService("Players"):FindFirstChild(selectedPlayer)
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame
+            end
+        end
+    end
+})
+
+updatePlayerList()
+game:GetService("Players").PlayerAdded:Connect(updatePlayerList)
+game:GetService("Players").PlayerRemoving:Connect(updatePlayerList)
+
+local autoDropsEnabled = false
+
+local function collectDrops()
+    while autoDropsEnabled do
+        for _, drop in ipairs(workspace.Drops:GetChildren()) do
+            if drop:IsA("Model") and drop:FindFirstChild("Base") then
+                game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = drop.Base.CFrame
+                wait(0.5)
+            end
+        end
+        wait(0.5)
+    end
+end
+
+Tabs.Farm:AddToggle("AutoDropsToggle", {
+    Title = "Auto Drops",
+    Default = false,
+    Callback = function(value)
+        autoDropsEnabled = value
+        if autoDropsEnabled then
+            spawn(collectDrops)
+        end
+    end
+})
+
+local player = game:GetService("Players").LocalPlayer
+local replicatedStorage = game:GetService("ReplicatedStorage")
+
+local questStatusPath = player.PlayerGui.ScreenGui.Main.Top.QuestFrame.Progress.TextLabel
+local questTaskPath = player.PlayerGui.ScreenGui.Main.Top.QuestFrame.TaskLabel
+
+local onAreaButton = replicatedStorage:WaitForChild("Remotes"):WaitForChild("OnAreaButton")
+local claimQuestReward = replicatedStorage:WaitForChild("Remotes"):WaitForChild("ClaimQuestReward")
+local setGeneratorCrank = replicatedStorage:WaitForChild("Remotes"):WaitForChild("SetGeneratorCrank")
+
+local locations = {
+    ["Meadow"] = 1,
+    ["Forest"] = 2,
+    ["Desert"] = 3,
+    ["Arctic"] = 4,
+    ["Beach"] = 5,
+    ["Mountains"] = 6,
+    ["Jungle"] = 7,
+    ["Grotto"] = 8,
+    ["Grove"] = 9
+}
+
+local function cleanNumber(str)
+    if not str then return 0 end
+    str = str:gsub(",", "") 
+    str = str:gsub("[^%d%.]", "") 
+    return tonumber(str) or 0
+end
+
+local function getQuestLocation()
+    local taskText = questTaskPath.Text
+    for location, id in pairs(locations) do
+        if taskText:find(location) then
+            return id
+        end
+    end
+    return nil
+end
+
+local function movePets()
+    local locationId = getQuestLocation()
+    if locationId then
+        onAreaButton:FireServer(locationId)
+    end
+end
+
+local function setCrank(state)
+    local args = { [1] = state }
+    setGeneratorCrank:FireServer(unpack(args))
+end
+
+local farmingEnabled = false
+
+local function monitorQuest()
+    while farmingEnabled do
+        local progressText = questStatusPath.Text
+        local current, total = progressText:match("([%d%.]+%a?)%s*/%s*([%d%.]+%a?)")
+        if current and total then
+            local currentProgress = cleanNumber(current)
+            local totalProgress = cleanNumber(total)
+            if currentProgress >= totalProgress then
+                claimQuestReward:FireServer()
+                wait(2) 
+                setCrank(false)
+                wait(1)
+                movePets()
+                wait(1)
+                setCrank(true)
+            end
+        end
+
+        wait(1) 
+    end
+end
+
+
+local function toggleFarming(value)
+    farmingEnabled = value
+    if farmingEnabled then
+        setCrank(false)
+        wait(1)
+        movePets()
+        wait(1)
+        setCrank(true)
+        spawn(monitorQuest)
+    end
+end
+
+
+Tabs.Farm:AddToggle("AutoQuestToggle", {
+    Title = "Auto Quest Farm",
+    Default = false,
+    Callback = toggleFarming
+})
+
+local autoHiddenEggEnabled = false
+local hasCollectedEggs = false 
+
+local eggLocations = {
+    "Forest_Cabin", "Meadow_1", "Meadow_2", "Meadow_3", "Arctic_Cabin", "Desert_Cabin", 
+    "Arctic_Wall", "Desert_CabinTop", "Forest_Behind", "Beach_Cabin", "Beach_Door", "Jungle_Door",
+    "Beach_Water", "Mountains_Cabin", "Cliff", "Mountains_Wall", "Jungle_Overhang", "Jungle_Tree",
+    "Lobby_1", "Grotto_1", "Grotto_2", "Grotto_3", "Grotto_4", "Forest_3", "Forest_4", "Forest_5",
+    "Desert_3", "Desert_4", "Desert_5", "Desert_6", "Arctic_3", "Arctic_4", "Arctic_5", "Arctic_6",
+    "Beach_3", "Beach_4", "Jungle_8", "Grove_2", "Grove_3", "Grove_4", "HallOfFame", "Grove_1",
+    "Grotto_5", "Jungle_10", "Jungle_9", "Jungle_7", "Jungle_6", "Jungle_5", "Beach_5",
+    "Mountains_7", "Mountains_6", "Mountains_5", "Mountains_4", "Mountain_3", "Grotto_6"
+}
+
+local function getPetDiscoveryScore()
+    local scoreLabel = game:GetService("Players").LocalPlayer.PlayerGui.ScreenGui.Main.Left.ChecklistButton.ScoreLabel
+    if scoreLabel then
+        local scoreText = scoreLabel.Text:match("(%d+) / (%d+)")
+        return tonumber(scoreText)
+    end
+    return nil
+end
+
+local function collectHiddenEggs()
+    local score = getPetDiscoveryScore()
+
+    if autoHiddenEggEnabled and not hasCollectedEggs and score == 240 then
+        hasCollectedEggs = true 
+
+        for _, location in ipairs(eggLocations) do
+            game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("CollectHiddenEgg"):FireServer(location)
+            wait(0.1) 
+        end
+    end
+end
+
+Tabs.Rebirth:AddToggle("AutoHiddenEgg", {
+    Title = "Auto Hidden Egg",
+    Default = false,
+    Callback = function(value)
+        autoHiddenEggEnabled = value
+
+        if value then
+            hasCollectedEggs = false 
+            while autoHiddenEggEnabled do
+                collectHiddenEggs()
+                wait(5) 
+            end
+        end
+    end
+})
+
+
+local http_request = nil
+if syn and syn.request then
+    http_request = syn.request
+elseif request then
+    http_request = request
+elseif http and http.request then
+    http_request = http.request
+elseif Fluxus and Fluxus.request then
+    http_request = Fluxus.request
+elseif KRNL_LOADED and http_request then
+    http_request = http_request
+end
+
+if not http_request then
+    warn("Your executor does not support HTTP requests!")
+    return
+end
+
+local webhookURL = ""
+local delayTime = 1 
+local sendNotifications = false
+local storedValues = {}
+
+local function getPlayerStats()
+    local player = game:GetService("Players").LocalPlayer
+    return {
+        Gold = player.Gold.Value,
+        MythicGems = player.MythicGems.Value,
+        ExoticCrystalScore = player.ExoticCrystalScore.Value,
+        Runes = player.Runes.Value,
+        ShinyScore = player.ShinyScore.Value,
+        MetallicScore = player.MetallicScore.Value,
+        GiantScore = player.GiantScore.Value,
+        ShinyGiantScore = player.ShinyGiantScore.Value
+    }
+end
+
+local function formatNumber(n)
+    if not n then return "0" end  
+    n = tonumber(n) or 0  
+    local formatted = tostring(n):reverse():gsub("(%d%d%d)", "%1,"):reverse()
+    return formatted:gsub("^,", "")  
+end
+
+local function sendWebhookNotification(stats, webhookUrl)
+    
+    print("Webhook URL: " .. tostring(webhookUrl))  
+    
+    
+    if not webhookUrl or webhookUrl == "" then
+        warn("🚨 Webhook URL is missing! Make sure you input a valid webhook URL.")
+        return
+    end
+
+    
+    local embed = {
+        ["title"] = "📊 Astralix Hub - Earnings Update",
+        ["color"] = 16755200,  
+        ["thumbnail"] = { ["url"] = "https://i.imgur.com/DJrbhI8.png" },
+        ["fields"] = {
+            { ["name"] = "💰 Gold", ["value"] = formatNumber(stats.Gold), ["inline"] = true },
+            { ["name"] = "💎 Mythic Gems", ["value"] = formatNumber(stats.MythicGems), ["inline"] = true },
+            { ["name"] = "🔮 Exotic Crystals", ["value"] = formatNumber(stats.ExoticCrystalScore), ["inline"] = true },
+            { ["name"] = "📜 Runes", ["value"] = formatNumber(stats.Runes), ["inline"] = true },
+            { ["name"] = "✨ Shiny Score", ["value"] = formatNumber(stats.ShinyScore), ["inline"] = true },
+            { ["name"] = "🥇 Metallic Score", ["value"] = formatNumber(stats.MetallicScore), ["inline"] = true },
+            { ["name"] = "🗿 Giant Score", ["value"] = formatNumber(stats.GiantScore), ["inline"] = true },
+            { ["name"] = "🌟 Shiny Giant Score", ["value"] = formatNumber(stats.ShinyGiantScore), ["inline"] = true }
+        },
+        ["footer"] = { ["text"] = "🔔 Astralix Hub Notifications", ["icon_url"] = "https://i.imgur.com/DJrbhI8.png" },
+        ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+    }
+
+    
+    local payload = {
+        ["username"] = "Astralix Hub",
+        ["avatar_url"] = "https://i.imgur.com/DJrbhI8.png",
+        ["embeds"] = { embed }
+    }
+
+    
+    http_request({
+        Url = webhookUrl,  
+        Method = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body = game:GetService("HttpService"):JSONEncode(payload)
+    })
+end
+
+local function startTracking()
+    while sendNotifications do
+        local newValues = getPlayerStats()
+        local changes = {}
+
+        for key, value in pairs(newValues) do
+            if storedValues[key] then
+                local difference = value - storedValues[key]
+                if difference > 0 then
+                    changes[key] = difference
+                end
+            end
+        end
+
+        storedValues = newValues
+
+        if next(changes) then
+            sendWebhookNotification(changes, webhookURL)  
+        end
+
+        wait(delayTime * 60) 
+    end
+end
+
+Tabs.Webhook:AddInput("WebhookURL", {
+    Title = "Input Discord Webhook",
+    Placeholder = "Enter your Webhook URL",
+    Callback = function(value)
+        webhookURL = value
+        print("Webhook URL set to:", webhookURL)  
+    end
+})
+
+Tabs.Webhook:AddInput("Delay", {
+    Title = "Delay in minutes",
+    Placeholder = "Enter delay time in minutes",
+    Callback = function(value)
+        local num = tonumber(value)
+        if num and num > 0 then
+            delayTime = num
+            print("Delay set to:", delayTime, "minutes")
+        else
+            warn("Invalid delay input!")
+        end
+    end
+})
+
+Tabs.Webhook:AddToggle("EnableNotifications", {
+    Title = "Enable Webhook Notifications",
+    Default = false,
+    Callback = function(state)
+        sendNotifications = state
+        if sendNotifications then
+            storedValues = getPlayerStats() 
+            print("Webhook notifications enabled!")
+            startTracking()
+        else
+            print("Webhook notifications disabled!")
+        end
+    end
+})
+
+local Options = Fluent.Options
+
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+InterfaceManager:SetFolder("CAP")
+SaveManager:SetFolder("CAP/Collect All Pets")
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+Window:SelectTab(1)
