@@ -1,5 +1,4 @@
 wait(5)
-
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
@@ -186,6 +185,7 @@ local onAreaButton = replicatedStorage:WaitForChild("Remotes"):WaitForChild("OnA
 local claimQuestReward = replicatedStorage:WaitForChild("Remotes"):WaitForChild("ClaimQuestReward")
 local setGeneratorCrank = replicatedStorage:WaitForChild("Remotes"):WaitForChild("SetGeneratorCrank")
 local mineRemote = replicatedStorage:WaitForChild("Mining"):WaitForChild("MineRemote")
+local cancelMining = replicatedStorage:WaitForChild("Mining"):WaitForChild("Cancel")  -- Cancel mining remote
 
 local locations = {
     ["Meadow"] = 1, ["Forest"] = 2, ["Desert"] = 3, ["Arctic"] = 4, 
@@ -220,6 +220,7 @@ local function getQuestLocation()
 end
 
 local function movePets()
+    cancelMining:FireServer()  -- Stop mining before moving pets
     miningEnabled = false  -- Disable mining while moving pets
     wait(0.5)
     
@@ -331,7 +332,6 @@ for rarity, id in pairs(eggIDs) do
         end
     })
 end
-
 
 local autoHiddenEggEnabled = false
 local hasCollectedEggs = false 
