@@ -174,24 +174,25 @@ Tabs.Farm:AddToggle("AutoDropsToggle", {
 
 local player = game:GetService("Players").LocalPlayer
 local replicatedStorage = game:GetService("ReplicatedStorage")
+local workspace = game:GetService("Workspace")
 
 local questStatusPath = player.PlayerGui.ScreenGui.Main.Top.QuestFrame.Progress.TextLabel
 local questTaskPath = player.PlayerGui.ScreenGui.Main.Top.QuestFrame.TaskLabel
+local miningSpeedPath = workspace.UpgradeTree.Stats.StatIncrease_MiningSpeed.GuiPart.Gui.StatLabel
 
 local onAreaButton = replicatedStorage:WaitForChild("Remotes"):WaitForChild("OnAreaButton")
 local claimQuestReward = replicatedStorage:WaitForChild("Remotes"):WaitForChild("ClaimQuestReward")
 local setGeneratorCrank = replicatedStorage:WaitForChild("Remotes"):WaitForChild("SetGeneratorCrank")
+local mineRemote = replicatedStorage:WaitForChild("Mining"):WaitForChild("MineRemote")
 
 local locations = {
-    ["Meadow"] = 1,
-    ["Forest"] = 2,
-    ["Desert"] = 3,
-    ["Arctic"] = 4,
-    ["Beach"] = 5,
-    ["Mountains"] = 6,
-    ["Jungle"] = 7,
-    ["Grotto"] = 8,
-    ["Grove"] = 9
+    ["Meadow"] = 1, ["Forest"] = 2, ["Desert"] = 3, ["Arctic"] = 4, 
+    ["Beach"] = 5, ["Mountains"] = 6, ["Jungle"] = 7, ["Grotto"] = 8, ["Grove"] = 9
+}
+
+local eggIDs = {
+    ["Common"] = 1, ["Uncommon"] = 2, ["Rare"] = 3, ["Epic"] = 4,
+    ["Legendary"] = 5, ["Prodigious"] = 6, ["Ascended"] = 7, ["Mythical"] = 8
 }
 
 local function cleanNumber(str)
@@ -201,29 +202,44 @@ local function cleanNumber(str)
     return tonumber(str) or 0
 end
 
+local function getMiningSpeed()
+    local speedText = miningSpeedPath.Text
+    local speed = speedText:match("([%d%.]+)/s")
+    local miningSpeed = tonumber(speed) or 1  
+    return (1 / miningSpeed) + 0.1  -- Convert speed to delay & add 0.1
+end
+
 local function getQuestLocation()
     local taskText = questTaskPath.Text
     for location, id in pairs(locations) do
-        if taskText:find(location) then
-            return id
-        end
+        if taskText:find(location) then return id end
     end
     return nil
 end
 
 local function movePets()
+    miningEnabled = false  -- Disable mining while moving pets
+    wait(0.5)
+    
     local locationId = getQuestLocation()
     if locationId then
         onAreaButton:FireServer(locationId)
     end
+    
+    wait(1)  -- Ensure pets finish moving
+    miningEnabled = true  -- Re-enable mining
 end
 
-local function setCrank(state)
-    local args = { [1] = state }
-    setGeneratorCrank:FireServer(unpack(args))
+local function mine()
+    while autoMining do
+        if miningEnabled and selectedEggID then
+            mineRemote:FireServer(selectedEggID, Vector3.new(142.08, 6.73, 459.48))
+            wait(getMiningSpeed())  
+        else
+            wait(0.5)  -- Reduce unnecessary script execution
+        end
+    end
 end
-
-local farmingEnabled = false
 
 local function monitorQuest()
     while farmingEnabled do
@@ -234,38 +250,86 @@ local function monitorQuest()
             local totalProgress = cleanNumber(total)
             if currentProgress >= totalProgress then
                 claimQuestReward:FireServer()
-                wait(2) 
-                setCrank(false)
-                wait(1)
+                wait(2)
                 movePets()
-                wait(1)
-                setCrank(true)
             end
         end
-
-        wait(1) 
+        wait(1)  
     end
 end
 
-
-local function toggleFarming(value)
+local function toggleQuestOnly(value)
     farmingEnabled = value
     if farmingEnabled then
-        setCrank(false)
-        wait(1)
         movePets()
-        wait(1)
-        setCrank(true)
         spawn(monitorQuest)
     end
 end
 
+local function toggleQuestCrank(value)
+    farmingEnabled = value
+    if farmingEnabled then
+        setGeneratorCrank:FireServer(false)
+        wait(1)
+        movePets()
+        wait(1)
+        setGeneratorCrank:FireServer(true)
+        spawn(monitorQuest)
+    else
+        setGeneratorCrank:FireServer(false)
+    end
+end
 
-Tabs.Farm:AddToggle("AutoQuestToggle", {
-    Title = "Auto Quest Farm",
+local function toggleQuestMining(value)
+    farmingEnabled = value
+    autoMining = value
+    miningEnabled = value  -- Allow mining initially
+
+    if farmingEnabled then
+        movePets()
+        spawn(monitorQuest)
+    end
+    if autoMining then
+        spawn(mine)
+    end
+end
+
+local function toggleEggRarity(rarity)
+    selectedEggID = eggIDs[rarity]
+end
+
+Tabs.Farm:AddToggle("AutoQuestOnly", {
+    Title = "Auto Quest Only",
     Default = false,
-    Callback = toggleFarming
+    Callback = toggleQuestOnly
 })
+
+Tabs.Farm:AddToggle("AutoQuestCrank", {
+    Title = "Auto Quest + Crank",
+    Default = false,
+    Callback = toggleQuestCrank
+})
+
+Tabs.Farm:AddToggle("AutoQuestMining", {
+    Title = "Auto Quest + Mining",
+    Default = false,
+    Callback = toggleQuestMining
+})
+
+for rarity, id in pairs(eggIDs) do
+    Tabs.Farm:AddToggle("Egg" .. rarity, {
+        Title = rarity,
+        Default = false,
+        Callback = function(value)
+            if value then
+                toggleEggRarity(rarity)
+            else
+                selectedEggID = nil
+            end
+        end
+    })
+end
+
 
 local autoHiddenEggEnabled = false
 local hasCollectedEggs = false 
@@ -318,6 +382,163 @@ Tabs.Rebirth:AddToggle("AutoHiddenEgg", {
         end
     end
 })
+
+
+local http_request = nil
+if syn and syn.request then
+    http_request = syn.request
+elseif request then
+    http_request = request
+elseif http and http.request then
+    http_request = http.request
+elseif Fluxus and Fluxus.request then
+    http_request = Fluxus.request
+elseif KRNL_LOADED and http_request then
+    http_request = http_request
+end
+
+if not http_request then
+    warn("Your executor does not support HTTP requests!")
+    return
+end
+
+local webhookURL = ""
+local delayTime = 1 
+local sendNotifications = false
+local storedValues = {}
+
+local function getPlayerStats()
+    local player = game:GetService("Players").LocalPlayer
+    return {
+        Gold = player.Gold.Value,
+        MythicGems = player.MythicGems.Value,
+        ExoticCrystalScore = player.ExoticCrystalScore.Value,
+        Runes = player.Runes.Value,
+        ShinyScore = player.ShinyScore.Value,
+        MetallicScore = player.MetallicScore.Value,
+        GiantScore = player.GiantScore.Value,
+        ShinyGiantScore = player.ShinyGiantScore.Value,
+        Ingots = player.Ingots.Value -- Adding Ingots tracking
+    }
+end
+
+local function formatNumber(n)
+    if not n then return "0" end  -- Prevent nil errors
+    n = tonumber(n) or 0  -- Ensure it's a number
+    local formatted = tostring(n):reverse():gsub("(%d%d%d)", "%1,"):reverse()
+    return formatted:gsub("^,", "")  -- Remove leading comma if any
+end
+
+
+local function sendWebhookNotification(stats, webhookUrl)
+    -- Debug: Print the webhook URL to the console to ensure it's being retrieved properly
+    print("Webhook URL: " .. tostring(webhookUrl))  -- Debug line
+    
+    -- Check if the webhook URL is valid
+    if not webhookUrl or webhookUrl == "" then
+        warn("🚨 Webhook URL is missing! Make sure you input a valid webhook URL.")
+        return
+    end
+
+    -- Create embed
+    local embed = {
+        ["title"] = "📊 Astralix Hub - Earnings Update",
+        ["color"] = 16755200,  -- Gold-like color
+        ["thumbnail"] = { ["url"] = "https://i.imgur.com/DJrbhI8.png" },
+        ["fields"] = {
+            { ["name"] = "💰 Gold", ["value"] = formatNumber(stats.Gold), ["inline"] = true },
+            { ["name"] = "💎 Mythic Gems", ["value"] = formatNumber(stats.MythicGems), ["inline"] = true },
+            { ["name"] = "🔮 Exotic Crystals", ["value"] = formatNumber(stats.ExoticCrystalScore), ["inline"] = true },
+            { ["name"] = "📜 Runes", ["value"] = formatNumber(stats.Runes), ["inline"] = true },
+            { ["name"] = "✨ Shiny Score", ["value"] = formatNumber(stats.ShinyScore), ["inline"] = true },
+            { ["name"] = "🥇 Metallic Score", ["value"] = formatNumber(stats.MetallicScore), ["inline"] = true },
+            { ["name"] = "🗿 Giant Score", ["value"] = formatNumber(stats.GiantScore), ["inline"] = true },
+            { ["name"] = "🌟 Shiny Giant Score", ["value"] = formatNumber(stats.ShinyGiantScore), ["inline"] = true },
+            { ["name"] = "⛓️ Ingots", ["value"] = formatNumber(stats.Ingots), ["inline"] = true } -- New field for Ingots
+        },
+        ["footer"] = { ["text"] = "🔔 Astralix Hub Notifications", ["icon_url"] = "https://i.imgur.com/DJrbhI8.png" },
+        ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+    }
+
+    -- Send request
+    local payload = {
+        ["username"] = "Astralix Hub",
+        ["avatar_url"] = "https://i.imgur.com/DJrbhI8.png",
+        ["embeds"] = { embed }
+    }
+
+    -- Send HTTP request to webhook
+    http_request({
+        Url = webhookUrl,  -- Ensure this exists
+        Method = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body = game:GetService("HttpService"):JSONEncode(payload)
+    })
+end
+
+local function startTracking()
+    while sendNotifications do
+        local newValues = getPlayerStats()
+        local changes = {}
+
+        for key, value in pairs(newValues) do
+            if storedValues[key] then
+                local difference = value - storedValues[key]
+                if difference > 0 then
+                    changes[key] = difference
+                end
+            end
+        end
+
+        storedValues = newValues
+
+        if next(changes) then
+            sendWebhookNotification(changes)
+        end
+
+        wait(delayTime * 60)  -- Delay in minutes
+    end
+end
+
+-- Webhook settings in the UI
+Tabs.Webhook:AddInput("WebhookURL", {
+    Title = "Input Discord Webhook",
+    Placeholder = "Enter your Webhook URL",
+    Callback = function(value)
+        webhookURL = value
+        print("Webhook URL set to:", webhookURL)
+    end
+})
+
+Tabs.Webhook:AddInput("Delay", {
+    Title = "Delay in minutes",
+    Placeholder = "Enter delay time in minutes",
+    Callback = function(value)
+        local num = tonumber(value)
+        if num and num > 0 then
+            delayTime = num
+            print("Delay set to:", delayTime, "minutes")
+        else
+            warn("Invalid delay input!")
+        end
+    end
+})
+
+Tabs.Webhook:AddToggle("EnableNotifications", {
+    Title = "Enable Webhook Notifications",
+    Default = false,
+    Callback = function(state)
+        sendNotifications = state
+        if sendNotifications then
+            storedValues = getPlayerStats() 
+            print("Webhook notifications enabled!")
+            startTracking()
+        else
+            print("Webhook notifications disabled!")
+        end
+    end
+})
+
 
 local Options = Fluent.Options
 
